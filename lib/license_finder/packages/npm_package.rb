@@ -74,6 +74,7 @@ module LicenseFinder
             homepage: npm_json['homepage'],
             spec_licenses: Package.license_names_from_standard_spec(npm_json),
             install_path: npm_json['path'],
+            authors: npm_json['author'].nil? ? '' : npm_json['author']['name'],
             children: @dependencies.map(&:name))
     end
 
