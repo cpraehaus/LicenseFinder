@@ -2,6 +2,7 @@
 
 require 'pathname'
 require 'json'
+require 'license_finder/package_utils/possible_license_file'
 
 module LicenseFinder
   class Dotnet < PackageManager
@@ -47,6 +48,12 @@ module LicenseFinder
         end.compact
       end
 
+      def read_package_info
+        possible_spec_paths.flat_map do |path|
+          Nuget.read_package_info(File.read(path), path) if File.exist? path
+        end.compact
+      end
+
       def ==(other)
         other.name == name && other.version == version && other.possible_spec_paths == possible_spec_paths
       end
@@ -63,8 +70,29 @@ module LicenseFinder
                           .uniq { |d| [d.name, d.version] }
 
       package_metadatas.map do |d|
-        path = Dir.glob("#{Dir.home}/.nuget/packages/#{d.name.downcase}/#{d.version}").first
-        NugetPackage.new(d.name, d.version, spec_licenses: d.read_license_urls, install_path: path)
+        path = d.possible_spec_paths.find { |path| File.exist?(path) }
+        if path
+          path = File.dirname(path)
+        else
+          path = Dir.glob("#{Dir.home}/.nuget/packages/#{d.name.downcase}/#{d.version}").first
+        end
+        logger.debug self.class, "install dir: #{path}", color: :red
+
+        opts = d.read_package_info.first
+        loc_lic_path = "#{path}/LICENSE.fetched" if path.to_s.length > 0
+
+        if opts[:license_url].to_s.strip.length > 0 && loc_lic_path.to_s.length > 0
+          Nuget.get_license_file(opts[:license_url], loc_lic_path, false)
+          if not opts[:license_type]
+            lic_file = PossibleLicenseFile.new(loc_lic_path)
+            lic = lic_file.license if lic_file
+            opts[:license_type] = lic.name if lic
+          end
+        end
+
+        opts[:install_path] = path
+        opts[:spec_licenses] = opts[:license_type] ? [opts[:license_type]] : nil
+        NugetPackage.new(d.name, d.version, opts)
       end
     end
 

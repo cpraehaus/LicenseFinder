@@ -2,6 +2,7 @@
 
 require 'rexml/document'
 require 'zip'
+require 'open-uri'
 
 module LicenseFinder
   class Nuget < PackageManager
@@ -149,6 +150,52 @@ module LicenseFinder
       REXML::XPath.match(xml, '//metadata//licenseUrl')
                   .map(&:get_text)
                   .map(&:to_s)
+    end
+
+    def self.read_package_info(specfile_content, path)
+      opts = {}
+      xml = REXML::Document.new(specfile_content)
+      xmlMeta = xml.root.elements['metadata']
+      opts[:authors] = xmlMeta.elements['authors'].text
+      opts[:homepage] = xmlMeta.elements['projectUrl'].text
+      opts[:description] = xmlMeta.elements['description'].text
+      opts[:summary] = opts[:description].lines.first
+      opts[:license_type] = nil
+      if xmlMeta.elements['license'] && xmlMeta.elements['license'].attributes['type'] == 'expression'
+        opts[:license_type] = xmlMeta.elements['license'].text
+      elsif xmlMeta.elements['license'] && xmlMeta.elements['license'].attributes['type'] == 'file'
+        pkg_dir = File.dirname(path)
+        loc_lic_path = File.join(pkg_dir, xmlMeta.elements['license'].text)
+        #Core.default_logger.info "read_package_info", "loc_lic_path: #{loc_lic_path}"
+        lic_file = PossibleLicenseFile.new(loc_lic_path)
+        lic = lic_file.license if lic_file
+        opts[:license_type] = lic.name if lic
+      end
+      # Handle license type 'file'
+      opts[:license_url] = xmlMeta.elements['licenseUrl'] ? xmlMeta.elements['licenseUrl'].text : nil
+      return opts
+    end
+
+    def self.get_license_file(lic_url, local_file, force = false)
+      if !File.exists?(local_file) || force
+        #Core.default_logger.info "get_license_file", "get_license_file: #{lic_url}"
+        dl_url = lic_url&.gsub('github.com', 'raw.githubusercontent.com')&.gsub('blob/', '')
+        
+        URI.open(dl_url) do |uri|
+          # Try to detect redirect of the form https://go.microsoft.com/fwlink/?linkid=864965 => https://github.com/xamarin/XamarinComponents/blob/main/Util/Xamarin.Build.Download/LICENSE
+          # Since this often redirects to github.com we have a chance to get the raw license file by recursion
+          final_url = uri.base_uri.to_s
+          if final_url != lic_url
+            Core.default_logger.info "get_license_file", "redirect detected: #{lic_url} -> #{final_url}"
+            self.get_license_file(final_url, local_file, force)
+          else
+            # Save the file
+            File.open(local_file, "wb") do |file|
+              file.write(uri.read)
+            end
+          end
+        end
+      end
     end
   end
 end

@@ -27,7 +27,8 @@ module LicenseFinder
           ruby,
           simplifiedbsd,
           wtfpl,
-          zerobsd
+          zerobsd,
+          msdotnetlib
         ]
       end
 
@@ -346,6 +347,21 @@ module LicenseFinder
             'BSD Zero-Clause'
           ],
           url: 'https://opensource.org/licenses/0BSD',
+          matcher: matcher
+        )
+      end
+
+      def msdotnetlib
+        one_liner_regexp = %r{\bMICROSOFT\s+\.NET\s+LIBRARY}
+
+        matcher = AnyMatcher.new(
+          Matcher.from_regex(one_liner_regexp)
+        )
+
+        License.new(
+          short_name: 'MsDotNetLib',
+          pretty_name: 'Microsoft .NET Library License',
+          url: 'https://dotnet.microsoft.com/en/dotnet_library_license.htm',
           matcher: matcher
         )
       end
