@@ -40,7 +40,7 @@ module LicenseFinder
       @name = name
       @version = version
       @authors = options[:authors] || ''
-      @summary = options[:summary] || ''
+      @summary = options[:summary] || options[:description]&.lines&.first || ''
       @description = options[:description] || ''
       @homepage = options[:homepage] || ''
       @package_url = options[:package_url].to_s
