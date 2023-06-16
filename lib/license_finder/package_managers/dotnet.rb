@@ -82,8 +82,8 @@ module LicenseFinder
         loc_lic_path = "#{path}/LICENSE.fetched" if path.to_s.length > 0
 
         if opts[:license_url].to_s.strip.length > 0 && loc_lic_path.to_s.length > 0
-          Nuget.get_license_file(opts[:license_url], loc_lic_path, false)
-          if not opts[:license_type]
+          fetched = Nuget.get_license_file(opts[:license_url], loc_lic_path, false)
+          if fetched and not opts[:license_type]
             lic_file = PossibleLicenseFile.new(loc_lic_path)
             lic = lic_file.license if lic_file
             opts[:license_type] = lic.name if lic

@@ -178,24 +178,30 @@ module LicenseFinder
 
     def self.get_license_file(lic_url, local_file, force = false)
       if !File.exists?(local_file) || force
-        #Core.default_logger.info "get_license_file", "get_license_file: #{lic_url}"
+        Core.default_logger.info "get_license_file", "get_license_file: #{lic_url} / #{local_file}"
         dl_url = lic_url&.gsub('github.com', 'raw.githubusercontent.com')&.gsub('blob/', '')
         
-        URI.open(dl_url) do |uri|
-          # Try to detect redirect of the form https://go.microsoft.com/fwlink/?linkid=864965 => https://github.com/xamarin/XamarinComponents/blob/main/Util/Xamarin.Build.Download/LICENSE
-          # Since this often redirects to github.com we have a chance to get the raw license file by recursion
-          final_url = uri.base_uri.to_s
-          if final_url != lic_url
-            Core.default_logger.info "get_license_file", "redirect detected: #{lic_url} -> #{final_url}"
-            self.get_license_file(final_url, local_file, force)
-          else
-            # Save the file
-            File.open(local_file, "wb") do |file|
-              file.write(uri.read)
+        begin
+          URI.open(dl_url) do |uri|
+            # Try to detect redirect of the form https://go.microsoft.com/fwlink/?linkid=864965 => https://github.com/xamarin/XamarinComponents/blob/main/Util/Xamarin.Build.Download/LICENSE
+            # Since this often redirects to github.com we have a chance to get the raw license file by recursion
+            final_url = uri.base_uri.to_s
+            if final_url != lic_url
+              Core.default_logger.info "get_license_file", "redirect detected: #{lic_url} -> #{final_url}"
+              self.get_license_file(final_url, local_file, force)
+            else
+              # Save the file
+              File.open(local_file, "wb") do |file|
+                file.write(uri.read)
+              end
             end
           end
+        rescue OpenURI::HTTPError => error
+          Core.default_logger.info "get_license_file", "get_license_file failed for #{lic_url}: #{error}"
+          return false
         end
       end
+      return true
     end
   end
 end
