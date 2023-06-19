@@ -10,11 +10,13 @@ module LicenseFinder
     end
 
     def package_management_command
-      'npm'
+      'npm --legacy-peer-deps'
     end
 
     def prepare_command
-      'npm install --no-save --ignore-scripts'
+      # --legacy-peer-deps to workaround https://github.com/npm/cli/issues/3666
+      # to work with node 18 and npm 9
+      'npm install --no-save --ignore-scripts --legacy-peer-deps'
     end
 
     def possible_package_paths
@@ -34,7 +36,8 @@ module LicenseFinder
     private
 
     def npm_json
-      command = "#{package_management_command} list --json --long#{production_flag}"
+      command = "#{package_management_command} list --json --long#{all_flag}#{production_flag}"
+      command += " #{@npm_options}" unless @npm_options.nil?
       stdout, stderr, status = Dir.chdir(project_path) { Cmd.run(command) }
       # we can try and continue if we got an exit status 1 - unmet peer dependency
       raise "Command '#{command}' failed to execute: #{stderr}" if !status.success? && status.exitstatus != 1
@@ -45,7 +48,29 @@ module LicenseFinder
     def production_flag
       return '' if @ignored_groups.nil?
 
-      @ignored_groups.include?('devDependencies') ? ' --production' : ''
+      # NOTE: newer npm vers use --omit=dev instead of --production
+      @ignored_groups.include?('devDependencies') ? ' --omit=dev' : ''
     end
+
+    def production_flag
+      return '' if @ignored_groups.nil?
+      prod_flag = npm_version >= 9 ? ' --omit=dev' : ' --production'
+
+      @ignored_groups.include?('devDependencies') ? prod_flag : ''
+    end
+
+    def all_flag
+      npm_version >= 7 ? ' --all' : ''
+    end
+
+    def npm_version
+      command = "#{package_management_command} -v"
+      stdout, stderr, status = Dir.chdir(project_path) { Cmd.run(command) }
+      raise "Command '#{command}' failed to execute: #{stderr}" unless status.success?
+
+      version = stdout.split('.').map(&:to_i)
+      version[0]
+    end
+  
   end
 end
